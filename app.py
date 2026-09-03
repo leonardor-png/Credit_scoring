@@ -324,12 +324,12 @@ def main() -> None:
     d4.metric("Tasso di default", f"{metriche['tasso_default']:.1%}")
 
    st.caption(
-    f"Stima su {metriche['n_train']} imprese, validazione su {metriche['n_test']} "
-    "osservazioni non utilizzate in stima. Lo scarto contenuto fra AUC train e test "
-    "indica assenza di overfitting; il potere discriminante elevato riflette anche il "
-    "fatto che i dati sono generati dallo stesso tipo di funzione che il modello stima."
-)
+        f"Stima su {metriche['n_train']} imprese, validazione su {metriche['n_test']} "
+        "osservazioni non utilizzate in stima. Lo scarto contenuto fra AUC train e test "
+        "indica assenza di overfitting; il potere discriminante elevato riflette anche il "
+        "fatto che i dati sono generati dallo stesso tipo di funzione che il modello stima."
     )
+    
 
     with st.expander("Coefficienti stimati (variabili standardizzate)"):
         st.dataframe(coefficienti, hide_index=True, width="stretch")
