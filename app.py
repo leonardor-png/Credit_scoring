@@ -5,7 +5,7 @@ Modello dimostrativo di scoring del credito per PMI con integrazione
 di un fattore ESG nel pricing del debito.
 
 ATTENZIONE METODOLOGICA
-Il dataset è interamente simulato. La relazione tra ESG e default e'
+Il dataset è interamente simulato. La relazione tra ESG e default è
 imposta nel processo generatore dei dati (funzione simula_portafoglio):
 il modello la ritrova, non la scopre. Lo strumento serve a rendere
 visibile e manipolabile un meccanismo, non a stimarlo.
@@ -28,7 +28,7 @@ SEED = 42
 N_IMPRESE = 4000
 
 # Esposizione alla transizione climatica per settore.
-# Valore alto = maggiore sensibilita' del merito creditizio al profilo ESG.
+# Valore alto = maggiore sensibilità del merito creditizio al profilo ESG.
 SETTORI = {
     "Manifattura":  {"quota": 0.25, "rischio_base":  0.10, "esposizione_transizione": 1.0},
     "Servizi":      {"quota": 0.30, "rischio_base": -0.20, "esposizione_transizione": 0.3},
@@ -38,7 +38,7 @@ SETTORI = {
 }
 
 # Coefficienti del processo generatore dei dati (DGP).
-# Sono ASSUNZIONI, non stime. Esplicitarli e' il punto.
+# Sono ASSUNZIONI, non stime. Esplicitarli è il punto.
 DGP = {
     "intercetta":       -4.80,  # calibrata su un tasso di default di portafoglio ~5%
     "leva":              0.55,   # Debito / EBITDA
@@ -73,9 +73,9 @@ FEATURES = [
 def simula_portafoglio(n: int = N_IMPRESE, seed: int = SEED) -> pd.DataFrame:
     """Genera un portafoglio sintetico di PMI affidate.
 
-    Il default è estratto da una Bernoulli sulla probabilita' latente,
+    Il default è estratto da una Bernoulli sulla probabilità latente,
     non ottenuto tagliando la sigmoide a 0.5: le imprese con lo stesso
-    profilo possono avere esiti diversi, come nella realta'.
+    profilo possono avere esiti diversi, come nella realtà.
     """
     rng = np.random.default_rng(seed)
 
@@ -92,15 +92,15 @@ def simula_portafoglio(n: int = N_IMPRESE, seed: int = SEED) -> pd.DataFrame:
     leva = np.clip(rng.gamma(shape=4.0, scale=0.65, size=n), 0.2, 8.0)  # Debito/EBITDA
     ritardi = rng.poisson(0.35, size=n)
 
-    # Imprese piu' grandi e strutturate tendono ad avere ESG migliore:
-    # correlazione debole ma realistica, non ortogonalita' artificiale.
+    # Imprese più grandi e strutturate tendono ad avere ESG migliore:
+    # correlazione debole ma realistica, non ortogonalità artificiale.
     esg = 52 + 4.5 * (np.log(fatturato) - 14.0) + rng.normal(0, 16, size=n)
     esg = np.clip(esg, 0, 100)
 
     esg_centrato = esg - 50.0
 
-    # L'effetto ESG e' modulato dall'esposizione settoriale alla transizione:
-    # in un settore energivoro un profilo ambientale debole pesa di piu'.
+    # L'effetto ESG è modulato dall'esposizione settoriale alla transizione:
+    # in un settore energivoro un profilo ambientale debole pesa di più.
     logit = (
         DGP["intercetta"]
         + DGP["leva"] * leva
@@ -191,7 +191,7 @@ def calcola_sconto_esg(esg: float, esposizione: float) -> float:
     """Sconto ESG a soglie, scalato per esposizione settoriale.
 
     NOTA: è una regola commerciale parametrica, non un coefficiente
-    stimato. Lo sconto vale di piu' dove la transizione morde di piu'.
+    stimato. Lo sconto vale di più dove la transizione morde di più.
     """
     if esg >= SOGLIA_ESG_PIENA:
         base = SCONTO_PIENO
@@ -227,7 +227,7 @@ def main() -> None:
     )
 
     st.warning(
-        "**Dati simulati.** Il portafoglio e' generato artificialmente e la relazione "
+        "**Dati simulati.** Il portafoglio è generato artificialmente e la relazione "
         "tra ESG e default è imposta nel processo generatore: il modello la ritrova, "
         "non la dimostra. Vedi la nota metodologica in fondo alla pagina.",
         icon=":material/science:",
@@ -323,13 +323,13 @@ def main() -> None:
     d3.metric("AUC (train)", f"{metriche['auc_train']:.3f}")
     d4.metric("Tasso di default", f"{metriche['tasso_default']:.1%}")
 
-   st.caption(
-        f"Stima su {metriche['n_train']} imprese, validazione su {metriche['n_test']} "
+    st.caption(
+        f"Stima su {metriche['n_train']:,} imprese, validazione su {metriche['n_test']:,} "
         "osservazioni non utilizzate in stima. Lo scarto contenuto fra AUC train e test "
         "indica assenza di overfitting; il potere discriminante elevato riflette anche il "
         "fatto che i dati sono generati dallo stesso tipo di funzione che il modello stima."
+        
     )
-    
 
     with st.expander("Coefficienti stimati (variabili standardizzate)"):
         st.dataframe(coefficienti, hide_index=True, width="stretch")
@@ -359,7 +359,7 @@ attraverso uno spread a fasce con uno sconto legato al profilo ESG.
    a 60 e 75 punti, scalate per esposizione settoriale. È il modo in cui una banca
    potrebbe *tradurre operativamente* un greenium, non una misura del greenium stesso.
 
-**Perché puo' comunque essere utile.** Rende esplicito e manipolabile il meccanismo con
+**Perché può comunque essere utile.** Rende esplicito e manipolabile il meccanismo con
 cui un fattore ambientale può entrare nel pricing del credito — che è esattamente ciò che
 le linee guida di vigilanza chiedono alle banche di formalizzare. La stima empirica del
 differenziale di prezzo è oggetto della tesi, su dati di mercato.
