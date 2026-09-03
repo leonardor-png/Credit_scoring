@@ -5,7 +5,7 @@ Modello dimostrativo di scoring del credito per PMI con integrazione
 di un fattore ESG nel pricing del debito.
 
 ATTENZIONE METODOLOGICA
-Il dataset e' interamente simulato. La relazione tra ESG e default e'
+Il dataset è interamente simulato. La relazione tra ESG e default e'
 imposta nel processo generatore dei dati (funzione simula_portafoglio):
 il modello la ritrova, non la scopre. Lo strumento serve a rendere
 visibile e manipolabile un meccanismo, non a stimarlo.
@@ -73,7 +73,7 @@ FEATURES = [
 def simula_portafoglio(n: int = N_IMPRESE, seed: int = SEED) -> pd.DataFrame:
     """Genera un portafoglio sintetico di PMI affidate.
 
-    Il default e' estratto da una Bernoulli sulla probabilita' latente,
+    Il default è estratto da una Bernoulli sulla probabilita' latente,
     non ottenuto tagliando la sigmoide a 0.5: le imprese con lo stesso
     profilo possono avere esiti diversi, come nella realta'.
     """
@@ -190,7 +190,7 @@ def calcola_spread(pd_stimata: float) -> float:
 def calcola_sconto_esg(esg: float, esposizione: float) -> float:
     """Sconto ESG a soglie, scalato per esposizione settoriale.
 
-    NOTA: e' una regola commerciale parametrica, non un coefficiente
+    NOTA: è una regola commerciale parametrica, non un coefficiente
     stimato. Lo sconto vale di piu' dove la transizione morde di piu'.
     """
     if esg >= SOGLIA_ESG_PIENA:
@@ -228,7 +228,7 @@ def main() -> None:
 
     st.warning(
         "**Dati simulati.** Il portafoglio e' generato artificialmente e la relazione "
-        "tra ESG e default e' imposta nel processo generatore: il modello la ritrova, "
+        "tra ESG e default è imposta nel processo generatore: il modello la ritrova, "
         "non la dimostra. Vedi la nota metodologica in fondo alla pagina.",
         icon=":material/science:",
     )
@@ -323,12 +323,12 @@ def main() -> None:
     d3.metric("AUC (train)", f"{metriche['auc_train']:.3f}")
     d4.metric("Tasso di default", f"{metriche['tasso_default']:.1%}")
 
-    st.caption(
-        f"Stima su {metriche['n_train']:,} imprese, validazione su {metriche['n_test']:,} "
-        "osservazioni non utilizzate in stima. Lo scarto contenuto fra AUC train e test "
-        "indica assenza di overfitting; il potere discriminante elevato riflette anche il "
-        "fatto che i dati sono generati dallo stesso tipo di funzione che il modello stima."
-        .replace(",", ".")
+   st.caption(
+    f"Stima su {metriche['n_train']} imprese, validazione su {metriche['n_test']} "
+    "osservazioni non utilizzate in stima. Lo scarto contenuto fra AUC train e test "
+    "indica assenza di overfitting; il potere discriminante elevato riflette anche il "
+    "fatto che i dati sono generati dallo stesso tipo di funzione che il modello stima."
+)
     )
 
     with st.expander("Coefficienti stimati (variabili standardizzate)"):
