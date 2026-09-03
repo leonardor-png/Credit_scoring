@@ -5,142 +5,115 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from scipy.stats.mstats import winsorize
 
-# --- 1. PREPARAZIONE DATI E MODELLO ---
-@st.cache_resource
-def train_enterprise_model():
+# --- 1. SIMULAZIONE DATASET DA TERMINALE FINANZIARIO ---
+@st.cache_data
+def load_and_prep_data():
+    """
+    Simula il caricamento di un dataset cross-section/panel estratto da 
+    Refinitiv Workspace o Bloomberg, contenente metriche finanziarie ed ESG.
+    """
     np.random.seed(42)
-    n_samples = 3000
-    
-    # Generazione Variabili
-    eta = np.random.randint(18, 75, n_samples)
-    reddito = np.random.normal(35000, 15000, n_samples)
-    dti = np.random.uniform(0.1, 0.7, n_samples)
-    utilizzo_credito = np.random.uniform(0, 1, n_samples)
-    ritardi = np.random.poisson(0.5, n_samples)
-    
-    # Integrazione Parametri ESG (Es. Refinitiv Pillar Scores o rating interni)
-    esg_score = np.random.normal(50, 15, n_samples) 
-    
-    contratto = np.random.choice(['Indeterminato', 'Determinato', 'Partita IVA'], n_samples, p=[0.60, 0.25, 0.15])
+    n = 2500
     
     df = pd.DataFrame({
-        'Eta': eta,
-        'Reddito': reddito,
-        'DTI': dti,
-        'Utilizzo_Credito': utilizzo_credito,
-        'Ritardi': ritardi,
-        'ESG_Score': esg_score,
-        'Contratto': contratto
+        'Reddito': np.random.normal(45000, 20000, n),
+        'DTI': np.random.uniform(0.1, 0.6, n),
+        'Ritardi': np.random.poisson(0.3, n),
+        'ESG_Pillar_Score': np.random.normal(55, 18, n), # Score da 0 a 100
+        'Contratto': np.random.choice(['Indeterminato', 'Determinato', 'Partita IVA'], n, p=[0.65, 0.20, 0.15])
     })
     
-    # Winsorizzazione per code distributive (gestione outlier econometrici)
-    df['Reddito'] = winsorize(df['Reddito'], limits=[0.01, 0.05])
-    df['ESG_Score'] = np.clip(df['ESG_Score'], 0, 100) # Tronchiamo tra 0 e 100
+    # Rigore econometrico: Winsorizzazione per gestire gli outlier senza distorcere i coefficienti
+    df['Reddito'] = winsorize(df['Reddito'], limits=[0.02, 0.05])
+    df['ESG_Pillar_Score'] = np.clip(df['ESG_Pillar_Score'], 0, 100)
     
-    # Encoding Variabili Categoriche
+    # Encoding variabili dummy
     df = pd.get_dummies(df, columns=['Contratto'], drop_first=True)
     
-    # Equazione Latente (Un alto punteggio ESG riduce marginalmente il rischio, simulando l'effetto greenium)
-    score_latente = (
-        (df['DTI'] * 4.0) + 
-        (df['Utilizzo_Credito'] * 2.5) + 
-        (df['Ritardi'] * 2.0) + 
-        (df.get('Contratto_Determinato', 0) * 1.0) + 
-        (df.get('Contratto_Partita IVA', 0) * 1.5) - 
-        (df['Reddito'] / 35000) -
-        (df['Eta'] / 80) -
-        (df['ESG_Score'] / 150) + 
-        np.random.normal(0, 1, n_samples)
-    )
+    # Generazione variabile target (Probability of Default)
+    score_latente = (df['DTI']*4.5) + (df['Ritardi']*2.2) - (df['Reddito']/40000) - (df['ESG_Pillar_Score']/120) + np.random.normal(0, 1, n)
+    df['Default'] = (1 / (1 + np.exp(-score_latente)) > 0.5).astype(int)
     
-    prob_reale = 1 / (1 + np.exp(-score_latente))
-    df['Default'] = (prob_reale > 0.5).astype(int)
-    
+    return df
+
+# --- 2. ADDESTRAMENTO MODELLO ---
+@st.cache_resource
+def train_model(df):
     X = df.drop(columns=['Default'])
     y = df['Default']
     
-    # Standardizzazione delle variabili (Z-score) per rendere i coefficienti beta comparabili
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    # Addestramento
-    model = LogisticRegression(max_iter=1000)
+    model = LogisticRegression()
     model.fit(X_scaled, y)
     
-    # Estrazione dell'importanza delle variabili (valore assoluto dei coefficienti beta)
-    feature_importanza = pd.DataFrame({
-        'Variabile': X.columns,
-        'Importanza': np.abs(model.coef_[0])
-    }).sort_values(by='Importanza', ascending=True)
+    return model, scaler, X.columns
+
+df_storico = load_and_prep_data()
+modello, scaler, features = train_model(df_storico)
+
+# --- 3. PRICING ENGINE (Calcolo Spread e Greenium) ---
+def calcola_pricing(prob_default, esg_score):
+    """
+    Trasforma il rischio in prezzo e applica il Greenium per asset sostenibili.
+    """
+    tasso_base = 3.50 # Es. Euribor o costo della provvista
     
-    return model, scaler, X.columns, feature_importanza
+    # Calcolo dello Spread di rischio basato sulla PD
+    if prob_default < 0.05: spread_rischio = 1.00
+    elif prob_default < 0.15: spread_rischio = 2.50
+    elif prob_default < 0.30: spread_rischio = 4.50
+    else: spread_rischio = 7.00
+    
+    # Calcolo del Greenium (Sconto applicato per alto ESG Score)
+    green_discount = 0.0
+    if esg_score >= 75:
+        green_discount = 0.30 # -30 basis points
+    elif esg_score >= 60:
+        green_discount = 0.15 # -15 basis points
+        
+    tasso_finito = tasso_base + spread_rischio - green_discount
+    return tasso_finito, spread_rischio, green_discount
 
-modello, scaler, colonne_features, feature_importanza = train_enterprise_model()
-
-
-# --- 2. INTERFACCIA UTENTE ---
-st.set_page_config(page_title="Enterprise Credit Scoring", page_icon="🏦", layout="wide")
-
-st.title("🏦 Enterprise Credit & ESG Scoring Model")
-st.markdown("Valutazione del rischio di credito integrata con metriche di sostenibilità finanziaria.")
+# --- 4. INTERFACCIA WEB ---
+st.set_page_config(page_title="Risk & Pricing Model", layout="wide")
+st.title("🏦 Modello di Credit Scoring & Sostenibilità")
+st.markdown("Algoritmo di valutazione del rischio con integrazione delle dinamiche di **Greenium** nel pricing del debito.")
 st.divider()
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("**Dati Finanziari Base**")
-    input_eta = st.number_input("Età Richiedente", min_value=18, max_value=90, value=29, step=1)
-    input_reddito = st.number_input("Reddito Netto (€)", min_value=5000, value=35000, step=1000)
-    input_contratto = st.selectbox("Contratto", ['Indeterminato', 'Determinato', 'Partita IVA'])
+    st.subheader("Dati Finanziari Richiedente")
+    reddito = st.number_input("Reddito Annuo Netto (€)", 10000, 200000, 35000, step=1000)
+    dti = st.slider("Debt-to-Income (DTI)", 0.0, 1.0, 0.30, 0.01)
+    ritardi = st.number_input("Ritardi Storici", 0, 10, 0)
+    contratto = st.selectbox("Tipologia di Contratto", ['Indeterminato', 'Determinato', 'Partita IVA'])
 
 with col2:
-    st.markdown("**Metriche di Rischio (Credit Bureau)**")
-    input_dti = st.slider("Debt-to-Income (DTI)", 0.0, 1.0, 0.35, 0.01)
-    input_utilizzo = st.slider("Utilizzo Plafond Credito", 0.0, 1.0, 0.20, 0.01)
-    input_ritardi = st.number_input("Eventi di Insolvenza Passati", min_value=0, max_value=10, value=0, step=1)
+    st.subheader("Metriche di Sostenibilità")
+    esg_score = st.slider("ESG Pillar Score (0-100)", 0, 100, 50, 1, help="Score estratto da database provider")
+    st.info("💡 Un punteggio ESG > 60 innesca il fenomeno del Greenium, riducendo lo spread richiesto.")
 
-with col3:
-    st.markdown("**Metriche di Sostenibilità**")
-    input_esg = st.slider("Punteggio Sostenibilità (ESG Score)", 0, 100, 50, 1, 
-                          help="Un rating ESG elevato può sbloccare condizioni di tasso agevolate (Green Premium).")
-
-# --- 3. PREVISIONE E ANALISI ---
-if st.button("Esegui Analisi del Rischio", type="primary", use_container_width=True):
+if st.button("Valuta Merito Creditizio e Pricing", type="primary"):
     
-    is_determinato = 1 if input_contratto == 'Determinato' else 0
-    is_piva = 1 if input_contratto == 'Partita IVA' else 0
+    # Preparazione input
+    is_det = 1 if contratto == 'Determinato' else 0
+    is_piva = 1 if contratto == 'Partita IVA' else 0
     
-    # Vettore di input
-    input_raw = pd.DataFrame([[
-        input_eta, input_reddito, input_dti, input_utilizzo, 
-        input_ritardi, input_esg, is_determinato, is_piva
-    ]], columns=colonne_features)
+    input_data = pd.DataFrame([[reddito, dti, ritardi, esg_score, is_det, is_piva]], columns=features)
+    prob_default = modello.predict_proba(scaler.transform(input_data))[0][1]
     
-    # Applichiamo lo stesso scaling usato in fase di addestramento
-    input_scaled = scaler.transform(input_raw)
-    
-    prob_default = modello.predict_proba(input_scaled)[0][1]
-    score_finale = (1 - prob_default) * 1000 
+    tasso, spread, greenium = calcola_pricing(prob_default, esg_score)
     
     st.divider()
+    st.subheader("Esito Analisi e Struttura del Pricing")
     
-    # Layout risultati a due colonne
-    res_col1, res_col2 = st.columns([1, 1])
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Probability of Default", f"{prob_default:.2%}")
+    r2.metric("Tasso Base (Mercato)", "3.50%")
+    r3.metric("Spread Rischio", f"+{spread:.2f}%")
+    r4.metric("Effetto Greenium", f"-{greenium:.2f}%" if greenium > 0 else "0.00%")
     
-    with res_col1:
-        st.subheader("Esito Delibera")
-        st.metric(label="Credit Score (Scala 0-1000)", value=f"{score_finale:.0f}")
-        st.metric(label="Probability of Default (PD)", value=f"{prob_default:.2%}")
-        
-        if prob_default < 0.15:
-            st.success("✅ **APPROVATO (Rischio Basso)** - Applicabile spread standard o agevolato se ESG > 75.")
-        elif prob_default < 0.35:
-            st.warning("⚠️ **IN REVISIONE (Rischio Moderato)** - Richiesto intervento analista umano.")
-        else:
-            st.error("❌ **DECLINATO (Rischio Alto)** - Parametri fuori policy creditizia.")
-
-    with res_col2:
-        st.subheader("Interpretabilità del Modello (AI Act Compliance)")
-        st.markdown("Peso delle variabili nella decisione algoritmica:")
-        # Grafico a barre orizzontale nativo di Streamlit
-        st.bar_chart(feature_importanza.set_index('Variabile'))
+    st.success(f"### TASSO FINITO PROPOSTO: {tasso:.2f}%")
